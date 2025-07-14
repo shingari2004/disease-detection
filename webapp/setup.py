@@ -9,7 +9,7 @@ import h5py
 import logging
 import sys
 import subprocess
-
+global PIL_AVAILABLE
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -62,8 +62,6 @@ def install_dependencies():
         if not PIL_AVAILABLE:
             logger.info("Installing Pillow...")
             subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'Pillow'])
-            global PIL_AVAILABLE
-            from PIL import Image
             PIL_AVAILABLE = True
             logger.info("✓ Pillow installed successfully")
     except Exception as e:
