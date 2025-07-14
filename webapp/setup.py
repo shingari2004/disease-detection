@@ -424,7 +424,6 @@ def initialize_models():
         optimize_tensorflow()
         
         # Check system requirements first
-        check_system_requirements()
         
         # Install dependencies
         if not install_dependencies():
