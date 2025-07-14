@@ -7,6 +7,8 @@ import pickle
 from flask_cors import CORS
 import h5py
 import logging
+import sys
+import subprocess
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -18,15 +20,22 @@ try:
     PIL_AVAILABLE = True
 except ImportError:
     PIL_AVAILABLE = False
-    logger.warning("PIL (Pillow) not available. Please install: pip install Pillow")
+    logger.warning("PIL (Pillow) not available. Installing...")
 
 app = Flask(__name__)
-CORS(app)
+
+# Updated CORS configuration for Render
+CORS(app, origins=[
+    'https://your-nextjs-app.vercel.app',
+    'https://*.onrender.com',
+    'http://localhost:3000',
+    'http://localhost:3001'
+])
 
 BASE_DIR = os.path.dirname(os.path.realpath(__file__))
 MODEL_DIR = os.path.join(BASE_DIR, 'model')
 UPLOAD_FOLDER = os.path.join(BASE_DIR, 'bucket')
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'JPG'}
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'JPG', 'webp'}
 
 # Define classes first (needed for model creation)
 CLASSES = [
@@ -46,6 +55,19 @@ CLASSES = [
     'Tomato Tomato Yellow Leaf Curl Virus', 'Tomato Tomato mosaic virus',
     'Tomato healthy'
 ]
+
+def install_dependencies():
+    """Install required dependencies if not available."""
+    try:
+        if not PIL_AVAILABLE:
+            logger.info("Installing Pillow...")
+            subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'Pillow'])
+            global PIL_AVAILABLE
+            from PIL import Image
+            PIL_AVAILABLE = True
+            logger.info("✓ Pillow installed successfully")
+    except Exception as e:
+        logger.error(f"Failed to install dependencies: {e}")
 
 def preprocess_image(file_path):
     """Preprocess image with proper EfficientNet preprocessing."""
@@ -67,42 +89,33 @@ def preprocess_image(file_path):
             # Convert to numpy array
             input_arr = np.array(image, dtype=np.float32)
             logger.info(f"Image array shape: {input_arr.shape}")
-            logger.info(f"Image array min/max before preprocessing: {input_arr.min()}/{input_arr.max()}")
             
             # Add batch dimension
             input_arr = np.expand_dims(input_arr, axis=0)
             
-            # CRITICAL: Use EfficientNetV2 preprocessing
-            # EfficientNetV2 uses different preprocessing than simple /255 normalization
+            # Apply EfficientNetV2 preprocessing
             try:
                 from tensorflow.keras.applications.efficientnet_v2 import preprocess_input
                 input_arr = preprocess_input(input_arr)
                 logger.info("✓ Applied EfficientNetV2 preprocessing")
             except ImportError:
                 # Fallback: EfficientNet typically uses ImageNet normalization
-                # Convert to [0, 1] range first
                 input_arr = input_arr / 255.0
-                # Then apply ImageNet normalization
                 mean = np.array([0.485, 0.456, 0.406])
                 std = np.array([0.229, 0.224, 0.225])
                 input_arr = (input_arr - mean) / std
                 logger.info("✓ Applied ImageNet normalization as fallback")
             
-            logger.info(f"Final input shape: {input_arr.shape}")
-            logger.info(f"Final input min/max: {input_arr.min():.4f}/{input_arr.max():.4f}")
-            
             return input_arr
         else:
-            # TensorFlow method with proper preprocessing
+            # TensorFlow method fallback
             image = tf.keras.utils.load_img(file_path, target_size=(224, 224))
             input_arr = tf.keras.utils.img_to_array(image)
             input_arr = np.expand_dims(input_arr, axis=0)
             
-            # Apply EfficientNetV2 preprocessing
             from tensorflow.keras.applications.efficientnet_v2 import preprocess_input
             input_arr = preprocess_input(input_arr)
             
-            logger.info(f"TensorFlow preprocessing - Final shape: {input_arr.shape}")
             return input_arr
             
     except Exception as e:
@@ -127,29 +140,24 @@ def load_model_direct():
         }
         
         # Try loading with custom objects
-        try:
-            model = tf.keras.models.load_model(
-                model_path,
-                custom_objects=custom_objects,
-                compile=False
-            )
-            
-            # CRITICAL: Recompile the model with proper configuration
-            model.compile(
-                optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
-                loss='categorical_crossentropy',
-                metrics=['accuracy']
-            )
-            
-            logger.info("✓ Successfully loaded model directly")
-            return model
-            
-        except Exception as e:
-            logger.error(f"Direct loading failed: {e}")
-            raise
+        model = tf.keras.models.load_model(
+            model_path,
+            custom_objects=custom_objects,
+            compile=False
+        )
+        
+        # Recompile the model
+        model.compile(
+            optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
+            loss='categorical_crossentropy',
+            metrics=['accuracy']
+        )
+        
+        logger.info("✓ Successfully loaded model directly")
+        return model
         
     except Exception as e:
-        logger.error(f"Error in load_model_direct: {e}")
+        logger.error(f"Direct loading failed: {e}")
         raise
 
 def create_model_and_load_weights():
@@ -161,7 +169,7 @@ def create_model_and_load_weights():
         
         # Create base model
         base_model = EfficientNetV2S(
-            weights='imagenet',  # Start with ImageNet weights
+            weights='imagenet',
             include_top=False,
             input_shape=(224, 224, 3)
         )
@@ -174,7 +182,7 @@ def create_model_and_load_weights():
             tf.keras.layers.Dense(len(CLASSES), activation='softmax', name='predictions')
         ])
         
-        # Compile first with ImageNet weights
+        # Compile model
         model.compile(
             optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
             loss='categorical_crossentropy',
@@ -186,11 +194,9 @@ def create_model_and_load_weights():
         
         if os.path.exists(model_path):
             try:
-                # Method 1: Try to load full model weights
                 logger.info("Attempting to load custom weights...")
                 model.load_weights(model_path)
                 logger.info("✓ Successfully loaded custom weights")
-                
             except Exception as e:
                 logger.warning(f"Could not load custom weights: {e}")
                 logger.info("Using ImageNet weights as fallback")
@@ -260,23 +266,25 @@ def validate_model_predictions(model):
         dummy_input = np.random.random((1, 224, 224, 3)).astype(np.float32)
         
         # Apply same preprocessing as real images
-        from tensorflow.keras.applications.efficientnet_v2 import preprocess_input
-        dummy_input = preprocess_input(dummy_input)
+        try:
+            from tensorflow.keras.applications.efficientnet_v2 import preprocess_input
+            dummy_input = preprocess_input(dummy_input)
+        except ImportError:
+            # Fallback preprocessing
+            dummy_input = dummy_input / 255.0
+            mean = np.array([0.485, 0.456, 0.406])
+            std = np.array([0.229, 0.224, 0.225])
+            dummy_input = (dummy_input - mean) / std
         
         # Make prediction
         predictions = model.predict(dummy_input, verbose=0)
         
         logger.info(f"Dummy prediction shape: {predictions.shape}")
         logger.info(f"Dummy prediction sum: {np.sum(predictions[0]):.6f}")
-        logger.info(f"Dummy prediction contains NaN: {np.isnan(predictions).any()}")
-        logger.info(f"Dummy prediction contains Inf: {np.isinf(predictions).any()}")
         
         # Check if predictions are valid
         if np.isnan(predictions).any() or np.isinf(predictions).any():
             raise Exception("Model produces NaN or Inf predictions")
-        
-        if np.sum(predictions[0]) < 0.9 or np.sum(predictions[0]) > 1.1:
-            logger.warning(f"Predictions don't sum to 1.0: {np.sum(predictions[0])}")
         
         logger.info("✓ Model validation successful")
         return True
@@ -285,51 +293,45 @@ def validate_model_predictions(model):
         logger.error(f"Model validation failed: {e}")
         raise
 
-# Check if PIL is available
-if not PIL_AVAILABLE:
-    logger.info("Installing Pillow...")
-    try:
-        import subprocess
-        import sys
-        subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'Pillow'])
-        from PIL import Image
-        PIL_AVAILABLE = True
-        logger.info("✓ Pillow installed successfully")
-    except Exception as e:
-        logger.error(f"❌ Failed to install Pillow: {e}")
-
 # Initialize model variable
 MODEL = None
 REC_MODEL = None
 
-# Load the models
-try:
-    logger.info("Loading models...")
-    MODEL = load_model_comprehensive()
+def initialize_models():
+    """Initialize models with proper error handling."""
+    global MODEL, REC_MODEL
     
-    # Validate model
-    validate_model_predictions(MODEL)
-    
-    # Print model summary
-    logger.info("Model summary:")
-    MODEL.summary()
-    
-    # Load recommendation model if it exists
-    rf_model_path = os.path.join(MODEL_DIR, 'RF.pkl')
-    if os.path.exists(rf_model_path):
-        with open(rf_model_path, 'rb') as f:
-            REC_MODEL = pickle.load(f)
-        logger.info("✓ Recommendation model loaded")
-    else:
+    try:
+        # Install dependencies first
+        install_dependencies()
+        
+        logger.info("Loading models...")
+        MODEL = load_model_comprehensive()
+        
+        # Validate model
+        validate_model_predictions(MODEL)
+        
+        logger.info("Model loaded successfully")
+        
+        # Load recommendation model if it exists
+        rf_model_path = os.path.join(MODEL_DIR, 'RF.pkl')
+        if os.path.exists(rf_model_path):
+            with open(rf_model_path, 'rb') as f:
+                REC_MODEL = pickle.load(f)
+            logger.info("✓ Recommendation model loaded")
+        else:
+            REC_MODEL = None
+            logger.warning("⚠️ Recommendation model not found")
+        
+        logger.info("✓ All models initialized successfully")
+        
+    except Exception as e:
+        logger.error(f"Critical error initializing models: {e}")
+        # Set MODEL to None to handle gracefully in endpoints
+        MODEL = None
         REC_MODEL = None
-        logger.warning("⚠️ Recommendation model not found")
-    
-    logger.info("✓ All models loaded successfully")
-    
-except Exception as e:
-    logger.error(f"Critical error loading models: {e}")
-    # Don't raise here - let the server start but handle in endpoints
 
+# Create upload folder
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
@@ -341,11 +343,10 @@ def predict_disease():
     try:
         # Check if model is loaded
         if MODEL is None:
-            return jsonify({'error': 'Model not loaded properly'}), 500
-        
-        # Check if PIL is available
-        if not PIL_AVAILABLE:
-            return jsonify({'error': 'PIL (Pillow) library not available'}), 500
+            return jsonify({
+                'error': 'Model not loaded properly. Please check server logs.',
+                'status': 'model_error'
+            }), 500
         
         if 'file' not in request.files:
             return jsonify({'error': 'No file part'}), 400
@@ -367,30 +368,15 @@ def predict_disease():
                 logger.info(f"Making prediction with input shape: {input_arr.shape}")
                 predictions = MODEL.predict(input_arr, verbose=0)
                 
-                # Extensive debugging
-                logger.info(f"Raw predictions shape: {predictions.shape}")
-                logger.info(f"Raw predictions dtype: {predictions.dtype}")
-                logger.info(f"Raw predictions sum: {np.sum(predictions[0]):.6f}")
-                logger.info(f"Raw predictions sample: {predictions[0][:5]}")
-                logger.info(f"Contains NaN: {np.isnan(predictions).any()}")
-                logger.info(f"Contains Inf: {np.isinf(predictions).any()}")
-                
                 # Validate predictions
                 if np.isnan(predictions).any() or np.isinf(predictions).any():
                     logger.error("Model produced NaN or Inf predictions")
                     return jsonify({'error': 'Model produced invalid predictions'}), 500
                 
-                # Check if predictions are all zeros or very small
-                if np.max(predictions[0]) < 1e-10:
-                    logger.warning("All predictions are very small - possible model issue")
-                
                 # Get prediction results
                 prediction_index = int(np.argmax(predictions[0]))
                 confidence = float(predictions[0][prediction_index])
                 result = CLASSES[prediction_index]
-                
-                logger.info(f"Predicted class: {result} (index: {prediction_index})")
-                logger.info(f"Confidence: {confidence:.6f}")
                 
                 # Get top 3 predictions
                 top_3_indices = np.argsort(predictions[0])[-3:][::-1]
@@ -400,8 +386,6 @@ def predict_disease():
                         'class': CLASSES[idx],
                         'confidence': float(predictions[0][idx])
                     })
-                
-                logger.info(f"Top 3 predictions: {top_3_predictions}")
 
                 # Clean up
                 os.remove(file_path)
@@ -410,7 +394,8 @@ def predict_disease():
                     'result': result,
                     'confidence': confidence,
                     'top_3_predictions': top_3_predictions,
-                    'message': 'Prediction successful'
+                    'message': 'Prediction successful',
+                    'status': 'success'
                 })
 
             except Exception as e:
@@ -418,35 +403,55 @@ def predict_disease():
                 if os.path.exists(file_path):
                     os.remove(file_path)
                 logger.error(f"Prediction error: {e}")
-                import traceback
-                traceback.print_exc()
-                return jsonify({'error': f'Prediction failed: {str(e)}'}), 500
+                return jsonify({
+                    'error': f'Prediction failed: {str(e)}',
+                    'status': 'prediction_error'
+                }), 500
 
         return jsonify({'error': 'File type not allowed'}), 400
         
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': f'Server error: {str(e)}'}), 500
+        return jsonify({
+            'error': f'Server error: {str(e)}',
+            'status': 'server_error'
+        }), 500
 
 @app.route('/health', methods=['GET'])
 def health_check():
+    """Health check endpoint for Render monitoring."""
     return jsonify({
-        'status': 'healthy', 
+        'status': 'healthy',
+        'service': 'plant-disease-detection',
         'tensorflow_version': tf.__version__,
         'pil_available': PIL_AVAILABLE,
         'model_loaded': MODEL is not None,
-        'classes_count': len(CLASSES)
+        'classes_count': len(CLASSES),
+        'python_version': sys.version
+    })
+
+@app.route('/ready', methods=['GET'])
+def readiness_check():
+    """Readiness check for Render deployment."""
+    if MODEL is None:
+        return jsonify({
+            'status': 'not_ready',
+            'message': 'Model not loaded'
+        }), 503
+    
+    return jsonify({
+        'status': 'ready',
+        'message': 'Service is ready to handle requests'
     })
 
 @app.route('/test', methods=['GET'])
 def test_endpoint():
     return jsonify({
-        'message': 'Flask server is running',
+        'message': 'Flask server is running on Render',
         'pil_available': PIL_AVAILABLE,
         'model_loaded': MODEL is not None,
-        'classes_count': len(CLASSES)
+        'classes_count': len(CLASSES),
+        'service': 'plant-disease-detection'
     })
 
 @app.route('/model-info', methods=['GET'])
@@ -458,15 +463,23 @@ def model_info():
         
         # Test model with dummy input
         dummy_input = np.random.random((1, 224, 224, 3)).astype(np.float32)
-        from tensorflow.keras.applications.efficientnet_v2 import preprocess_input
-        dummy_input = preprocess_input(dummy_input)
+        
+        try:
+            from tensorflow.keras.applications.efficientnet_v2 import preprocess_input
+            dummy_input = preprocess_input(dummy_input)
+        except ImportError:
+            # Fallback preprocessing
+            dummy_input = dummy_input / 255.0
+            mean = np.array([0.485, 0.456, 0.406])
+            std = np.array([0.229, 0.224, 0.225])
+            dummy_input = (dummy_input - mean) / std
         
         predictions = MODEL.predict(dummy_input, verbose=0)
         
         model_info = {
-            'input_shape': MODEL.input_shape,
-            'output_shape': MODEL.output_shape,
-            'total_params': MODEL.count_params(),
+            'input_shape': str(MODEL.input_shape),
+            'output_shape': str(MODEL.output_shape),
+            'total_params': int(MODEL.count_params()),
             'layers': len(MODEL.layers),
             'compiled': MODEL.compiled_loss is not None,
             'dummy_prediction_sum': float(np.sum(predictions[0])),
@@ -483,17 +496,48 @@ def model_info():
 @app.route('/', methods=['GET'])
 def home():
     return jsonify({
-        'message': 'Plant Disease Detection API',
+        'message': 'Plant Disease Detection API - Running on Render',
         'status': 'running',
+        'service': 'plant-disease-detection',
+        'version': '1.0.0',
         'endpoints': {
-            'predict': '/predict (POST)',
-            'health': '/health (GET)',
-            'test': '/test (GET)',
-            'model-info': '/model-info (GET)'
+            'predict': '/predict (POST) - Upload image for disease detection',
+            'health': '/health (GET) - Health check',
+            'ready': '/ready (GET) - Readiness check',
+            'test': '/test (GET) - Test endpoint',
+            'model-info': '/model-info (GET) - Model information'
         }
     })
 
+# Error handlers
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({
+        'error': 'Endpoint not found',
+        'status': 'not_found'
+    }), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    return jsonify({
+        'error': 'Internal server error',
+        'status': 'internal_error'
+    }), 500
+
+@app.errorhandler(413)
+def request_entity_too_large(error):
+    return jsonify({
+        'error': 'File too large',
+        'status': 'file_too_large'
+    }), 413
+
+# Initialize models when the app starts
+initialize_models()
+
 if __name__ == "__main__":
-    # IMPORTANT: Modified for Heroku deployment
-    port = int(os.environ.get('PORT', 8080))
-    app.run(debug=False, host='0.0.0.0', port=port)
+    # Configuration for Render deployment
+    port = int(os.environ.get('PORT', 10000))  # Render uses port 10000 by default
+    debug = os.environ.get('FLASK_ENV') == 'development'
+    
+    logger.info(f"Starting Flask app on port {port}")
+    app.run(debug=debug, host='0.0.0.0', port=port)
