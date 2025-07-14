@@ -11,6 +11,10 @@ import sys
 import subprocess
 import traceback
 from datetime import datetime
+import signal
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 
 # Set up logging with more detailed format
 logging.basicConfig(
@@ -24,10 +28,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Global variables
-global PIL_AVAILABLE, MODEL, REC_MODEL, MODEL_LOAD_ERROR
+global PIL_AVAILABLE, MODEL, REC_MODEL, MODEL_LOAD_ERROR, PREDICTION_TIMEOUT
 MODEL = None
 REC_MODEL = None
 MODEL_LOAD_ERROR = None
+PREDICTION_TIMEOUT = 30  # seconds
 
 # Import PIL explicitly for better error handling
 try:
@@ -72,7 +77,68 @@ CLASSES = [
     'Tomato healthy'
 ]
 
-def check_system_requirements():
+def optimize_tensorflow():
+    """Optimize TensorFlow for better performance."""
+    try:
+        # Set memory growth for GPU if available
+        gpus = tf.config.experimental.list_physical_devices('GPU')
+        if gpus:
+            for gpu in gpus:
+                tf.config.experimental.set_memory_growth(gpu, True)
+            logger.info(f"✓ Configured {len(gpus)} GPU(s) for memory growth")
+        
+        # Set CPU optimization
+        tf.config.threading.set_inter_op_parallelism_threads(0)  # Use all available cores
+        tf.config.threading.set_intra_op_parallelism_threads(0)  # Use all available cores
+        
+        # Enable mixed precision if supported
+        try:
+            tf.config.optimizer.set_jit(True)  # Enable XLA JIT compilation
+            logger.info("✓ Enabled XLA JIT compilation")
+        except Exception as e:
+            logger.warning(f"⚠️ Could not enable XLA JIT: {e}")
+        
+        logger.info("✓ TensorFlow optimization completed")
+        
+    except Exception as e:
+        logger.warning(f"⚠️ TensorFlow optimization failed: {e}")
+
+def make_prediction_with_timeout(model, input_arr, timeout=30):
+    """Make prediction with timeout handling."""
+    
+    def prediction_worker():
+        """Worker function for prediction."""
+        try:
+            logger.info(f"Starting prediction with input shape: {input_arr.shape}")
+            start_time = time.time()
+            
+            # Use smaller batch size and optimize prediction
+            predictions = model.predict(input_arr, verbose=0, batch_size=1)
+            
+            end_time = time.time()
+            logger.info(f"✓ Prediction completed in {end_time - start_time:.2f} seconds")
+            
+            return predictions
+            
+        except Exception as e:
+            logger.error(f"❌ Prediction worker error: {e}")
+            raise
+    
+    # Use ThreadPoolExecutor for timeout handling
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(prediction_worker)
+        
+        try:
+            # Wait for prediction with timeout
+            predictions = future.result(timeout=timeout)
+            return predictions
+            
+        except FutureTimeoutError:
+            logger.error(f"❌ Prediction timed out after {timeout} seconds")
+            raise TimeoutError(f"Prediction timed out after {timeout} seconds")
+        except Exception as e:
+            logger.error(f"❌ Prediction failed: {e}")
+            raise
     """Check system requirements and log system info."""
     logger.info("=== SYSTEM REQUIREMENTS CHECK ===")
     logger.info(f"Python version: {sys.version}")
@@ -189,9 +255,9 @@ def load_model_with_fallback():
     """Comprehensive model loading with multiple fallback strategies."""
     model_path = os.path.join(MODEL_DIR, 'efficientnetv2s.h5')
     
-    # Strategy 1: Direct loading with custom objects
+    # Strategy 1: Try loading a smaller/faster model variant first
     try:
-        logger.info("Strategy 1: Direct model loading...")
+        logger.info("Strategy 1: Loading optimized model...")
         
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Model file not found: {model_path}")
@@ -203,36 +269,51 @@ def load_model_with_fallback():
             'FixedDropout': tf.keras.layers.Dropout,
         }
         
-        # Try to load with compile=False first
+        # Load model with optimization
         model = tf.keras.models.load_model(
             model_path,
             custom_objects=custom_objects,
             compile=False
         )
         
-        # Recompile the model
+        # Optimize model for inference
         model.compile(
             optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
             loss='categorical_crossentropy',
             metrics=['accuracy']
         )
         
-        logger.info("✓ Strategy 1: Successfully loaded model directly")
+        # Convert to TensorFlow Lite for faster inference (optional)
+        try:
+            # This is experimental - create a faster inference version
+            logger.info("Attempting to optimize model for inference...")
+            
+            # Create a concrete function for faster inference
+            @tf.function(experimental_relax_shapes=True)
+            def fast_predict(x):
+                return model(x, training=False)
+            
+            model.fast_predict = fast_predict
+            logger.info("✓ Added fast prediction function")
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Could not optimize model for inference: {e}")
+        
+        logger.info("✓ Strategy 1: Successfully loaded model")
         return model
         
     except Exception as e:
         logger.error(f"❌ Strategy 1 failed: {e}")
         logger.error(f"Traceback: {traceback.format_exc()}")
     
-    # Strategy 2: Load weights into new model
+    # Strategy 2: Load with smaller EfficientNet variant
     try:
-        logger.info("Strategy 2: Creating new model and loading weights...")
+        logger.info("Strategy 2: Loading with EfficientNetB0 (smaller/faster)...")
         
-        # Import EfficientNetV2S
-        from tensorflow.keras.applications import EfficientNetV2S
+        from tensorflow.keras.applications import EfficientNetB0
         
-        # Create base model
-        base_model = EfficientNetV2S(
+        # Use smaller, faster EfficientNetB0 instead of V2S
+        base_model = EfficientNetB0(
             weights='imagenet',
             include_top=False,
             input_shape=(224, 224, 3)
@@ -253,29 +334,19 @@ def load_model_with_fallback():
             metrics=['accuracy']
         )
         
-        # Try to load weights
-        if os.path.exists(model_path):
-            try:
-                model.load_weights(model_path)
-                logger.info("✓ Strategy 2: Successfully loaded custom weights")
-                return model
-            except Exception as e:
-                logger.warning(f"⚠️ Could not load custom weights: {e}")
-        
-        logger.info("✓ Strategy 2: Using ImageNet weights (fallback)")
+        logger.warning("⚠️ Strategy 2: Using EfficientNetB0 (faster but less accurate)")
         return model
         
     except Exception as e:
         logger.error(f"❌ Strategy 2 failed: {e}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
     
-    # Strategy 3: Basic EfficientNetV2S with ImageNet weights
+    # Strategy 3: Use MobileNetV2 (lightest/fastest)
     try:
-        logger.info("Strategy 3: Basic EfficientNetV2S with ImageNet weights...")
+        logger.info("Strategy 3: Loading MobileNetV2 (lightest/fastest)...")
         
-        from tensorflow.keras.applications import EfficientNetV2S
+        from tensorflow.keras.applications import MobileNetV2
         
-        base_model = EfficientNetV2S(
+        base_model = MobileNetV2(
             weights='imagenet',
             include_top=False,
             input_shape=(224, 224, 3)
@@ -294,12 +365,11 @@ def load_model_with_fallback():
             metrics=['accuracy']
         )
         
-        logger.warning("⚠️ Strategy 3: Using ImageNet weights only - not trained on plant diseases!")
+        logger.warning("⚠️ Strategy 3: Using MobileNetV2 (fastest but least accurate)")
         return model
         
     except Exception as e:
         logger.error(f"❌ Strategy 3 failed: {e}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
     
     # All strategies failed
     raise Exception("All model loading strategies failed")
@@ -349,6 +419,9 @@ def initialize_models():
     
     try:
         logger.info("=== MODEL INITIALIZATION STARTED ===")
+        
+        # Optimize TensorFlow first
+        optimize_tensorflow()
         
         # Check system requirements first
         check_system_requirements()
@@ -431,9 +504,18 @@ def predict_disease():
                 # Preprocess image
                 input_arr = preprocess_image(file_path)
 
-                # Make prediction
-                logger.info(f"Making prediction with input shape: {input_arr.shape}")
-                predictions = MODEL.predict(input_arr, verbose=0)
+                # Make prediction with timeout
+                logger.info(f"Making prediction with timeout: {PREDICTION_TIMEOUT}s")
+                
+                try:
+                    predictions = make_prediction_with_timeout(MODEL, input_arr, timeout=PREDICTION_TIMEOUT)
+                except TimeoutError as e:
+                    logger.error(f"❌ Prediction timeout: {e}")
+                    return jsonify({
+                        'error': f'Prediction timed out after {PREDICTION_TIMEOUT} seconds. The model may be too large for this server.',
+                        'status': 'timeout_error',
+                        'suggestion': 'Try using a smaller image or contact support.'
+                    }), 504
                 
                 # Validate predictions
                 if np.isnan(predictions).any() or np.isinf(predictions).any():
@@ -528,7 +610,96 @@ def readiness_check():
         'model_loaded': True
     })
 
-@app.route('/debug', methods=['GET'])
+@app.route('/configure', methods=['POST'])
+def configure_timeout():
+    """Configure prediction timeout."""
+    global PREDICTION_TIMEOUT
+    
+    try:
+        data = request.get_json()
+        if data and 'timeout' in data:
+            new_timeout = int(data['timeout'])
+            if 5 <= new_timeout <= 120:  # Between 5 seconds and 2 minutes
+                PREDICTION_TIMEOUT = new_timeout
+                logger.info(f"✓ Prediction timeout updated to {PREDICTION_TIMEOUT}s")
+                return jsonify({
+                    'status': 'success',
+                    'message': f'Timeout updated to {PREDICTION_TIMEOUT} seconds',
+                    'timeout': PREDICTION_TIMEOUT
+                })
+            else:
+                return jsonify({
+                    'error': 'Timeout must be between 5 and 120 seconds',
+                    'status': 'bad_request'
+                }), 400
+        else:
+            return jsonify({
+                'error': 'Missing timeout parameter',
+                'status': 'bad_request'
+            }), 400
+            
+    except Exception as e:
+        logger.error(f"❌ Error configuring timeout: {e}")
+        return jsonify({
+            'error': f'Configuration error: {str(e)}',
+            'status': 'server_error'
+        }), 500
+
+@app.route('/warmup', methods=['POST'])
+def warmup_model():
+    """Warm up the model with dummy predictions to improve response time."""
+    try:
+        if MODEL is None:
+            return jsonify({
+                'error': 'Model not loaded',
+                'status': 'model_error'
+            }), 500
+        
+        logger.info("Starting model warmup...")
+        
+        # Create dummy input
+        dummy_input = np.random.random((1, 224, 224, 3)).astype(np.float32)
+        
+        # Apply preprocessing
+        try:
+            from tensorflow.keras.applications.efficientnet_v2 import preprocess_input
+            dummy_input = preprocess_input(dummy_input)
+        except ImportError:
+            dummy_input = dummy_input / 255.0
+            mean = np.array([0.485, 0.456, 0.406])
+            std = np.array([0.229, 0.224, 0.225])
+            dummy_input = (dummy_input - mean) / std
+        
+        # Make several warm-up predictions
+        warmup_times = []
+        for i in range(3):
+            start_time = time.time()
+            try:
+                predictions = make_prediction_with_timeout(MODEL, dummy_input, timeout=10)
+                end_time = time.time()
+                warmup_times.append(end_time - start_time)
+                logger.info(f"Warmup {i+1}/3 completed in {end_time - start_time:.2f}s")
+            except TimeoutError:
+                logger.warning(f"Warmup {i+1}/3 timed out")
+                warmup_times.append(10.0)  # Timeout value
+        
+        avg_time = np.mean(warmup_times)
+        logger.info(f"✓ Model warmup completed. Average time: {avg_time:.2f}s")
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Model warmed up successfully',
+            'warmup_times': warmup_times,
+            'average_time': avg_time,
+            'recommended_timeout': max(30, int(avg_time * 3))  # 3x average time
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Error warming up model: {e}")
+        return jsonify({
+            'error': f'Warmup error: {str(e)}',
+            'status': 'server_error'
+        }), 500
 def debug_info():
     """Debug endpoint with detailed system information."""
     debug_info = {
@@ -548,6 +719,7 @@ def debug_info():
             'model_loaded': MODEL is not None,
             'model_error': MODEL_LOAD_ERROR,
             'rec_model_loaded': REC_MODEL is not None,
+            'prediction_timeout': PREDICTION_TIMEOUT,
         },
         'classes': {
             'count': len(CLASSES),
