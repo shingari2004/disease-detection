@@ -1,0 +1,117 @@
+2025-07-09 06:48:41,439 - __main__ - INFO - ==================================================
+2025-07-09 06:48:41,440 - __main__ - INFO - LOADING MODELS
+2025-07-09 06:48:41,440 - __main__ - INFO - ==================================================
+2025-07-09 06:48:41,440 - __main__ - INFO - Attempting method: H5 Direct
+2025-07-09 06:48:41,440 - __main__ - INFO - Model file size: 80.35 MB
+2025-07-09 06:48:41,468 - __main__ - WARNING - Direct loading failed: Unknown layer: 'TFOpLambda'. Please ensure you are using a `keras.utils.custom_object_scope` and that this object is included in the scope. See https://www.tensorflow.org/guide/keras/save_and_serialize#registering_the_custom_object for details.
+2025-07-09 06:48:41,570 - __main__ - ERROR - Error loading H5 model: unsupported callable
+2025-07-09 06:48:41,570 - __main__ - ERROR - Method H5 Direct failed: unsupported callable
+2025-07-09 06:48:41,572 - __main__ - INFO - Attempting method: SavedModel
+2025-07-09 06:48:41,572 - __main__ - ERROR - Error loading SavedModel: SavedModel directory not found: C:\Users\Asus1\Desktop\farminnovate\server\webapp\model\saved_model
+2025-07-09 06:48:41,572 - __main__ - ERROR - Method SavedModel failed: SavedModel directory not found: C:\Users\Asus1\Desktop\farminnovate\server\webapp\model\saved_model
+2025-07-09 06:48:41,573 - __main__ - INFO - Attempting method: Architecture + Weights
+2025-07-09 06:48:41,573 - __main__ - INFO - Creating EfficientNetV2S architecture...
+2025-07-09 06:48:43,766 - __main__ - ERROR - Error loading weights: Layer count mismatch when loading weights from file. Model expected 2 layers, found 4 saved layers.
+2025-07-09 06:48:43,766 - __main__ - WARNING - Could not load custom weights for Architecture + Weights
+2025-07-09 06:48:43,766 - __main__ - INFO - Attempting method: ImageNet Fallback
+2025-07-09 06:48:43,766 - __main__ - INFO - Creating EfficientNetV2S architecture...
+2025-07-09 06:48:45,413 - __main__ - INFO - Validating model...
+2025-07-09 06:48:45,413 - __main__ - INFO - Model input shape: (None, 224, 224, 3)
+2025-07-09 06:48:45,413 - __main__ - INFO - Model output shape: (None, 38)
+2025-07-09 06:48:45,425 - __main__ - INFO - Total parameters: 20,380,038
+2025-07-09 06:48:45,488 - __main__ - INFO - Using preprocessing method v1 for: C:\Users\Asus1\Desktop\farminnovate\server\webapp\bucket\temp_validation.png
+2025-07-09 06:48:45,488 - __main__ - INFO - Original image: (224, 224), mode: RGB
+2025-07-09 06:48:49,964 - __main__ - INFO - Method EfficientNet: sum=1.000000, max=0.046244, min=0.013737
+2025-07-09 06:48:49,985 - __main__ - INFO - Using preprocessing method v2 for: C:\Users\Asus1\Desktop\farminnovate\server\webapp\bucket\temp_validation.png
+2025-07-09 06:48:50,222 - __main__ - INFO - Method Simple: sum=1.000000, max=0.036638, min=0.017469
+2025-07-09 06:48:50,227 - __main__ - INFO - Using preprocessing method v3 for: C:\Users\Asus1\Desktop\farminnovate\server\webapp\bucket\temp_validation.png
+2025-07-09 06:48:50,416 - __main__ - INFO - Method Custom: sum=1.000000, max=0.041878, min=0.012626
+2025-07-09 06:48:50,416 - __main__ - INFO - Selected preprocessing method: EfficientNet standard
+2025-07-09 06:48:50,747 - __main__ - INFO - ==================================================
+2025-07-09 06:48:50,747 - __main__ - INFO - MODEL LOADING COMPLETE
+2025-07-09 06:48:50,747 - __main__ - INFO - Main model method: ImageNet Fallback
+2025-07-09 06:48:50,747 - __main__ - INFO - Recommendation model: Loaded
+2025-07-09 06:48:50,747 - __main__ - INFO - ==================================================
+2025-07-09 06:48:50,770 - __main__ - INFO - ==================================================
+2025-07-09 06:48:50,771 - __main__ - INFO - STARTING PLANT DISEASE DETECTION SERVER
+2025-07-09 06:48:50,771 - __main__ - INFO - ==================================================
+2025-07-09 06:48:50,772 - __main__ - INFO - Model loaded: True
+2025-07-09 06:48:50,772 - __main__ - INFO - Loading method: ImageNet Fallback
+2025-07-09 06:48:50,773 - __main__ - INFO - PIL available: True
+2025-07-09 06:48:50,774 - __main__ - INFO - TensorFlow version: 2.19.0
+2025-07-09 06:48:50,774 - __main__ - INFO - ==================================================
+2025-07-09 06:48:50,837 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8080
+ * Running on http://172.16.37.135:8080
+2025-07-09 06:48:50,838 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-07-09 06:48:50,842 - werkzeug - INFO -  * Restarting with stat
+2025-07-09 06:48:55,040 - __main__ - INFO - ==================================================
+2025-07-09 06:48:55,045 - __main__ - INFO - LOADING MODELS
+2025-07-09 06:48:55,045 - __main__ - INFO - ==================================================
+2025-07-09 06:48:55,045 - __main__ - INFO - Attempting method: H5 Direct
+2025-07-09 06:48:55,045 - __main__ - INFO - Model file size: 80.35 MB
+2025-07-09 06:48:55,059 - __main__ - WARNING - Direct loading failed: Unknown layer: 'TFOpLambda'. Please ensure you are using a `keras.utils.custom_object_scope` and that this object is included in the scope. See https://www.tensorflow.org/guide/keras/save_and_serialize#registering_the_custom_object for details.
+2025-07-09 06:48:55,158 - __main__ - ERROR - Error loading H5 model: unsupported callable
+2025-07-09 06:48:55,159 - __main__ - ERROR - Method H5 Direct failed: unsupported callable
+2025-07-09 06:48:55,160 - __main__ - INFO - Attempting method: SavedModel
+2025-07-09 06:48:55,161 - __main__ - ERROR - Error loading SavedModel: SavedModel directory not found: C:\Users\Asus1\Desktop\farminnovate\server\webapp\model\saved_model
+2025-07-09 06:48:55,161 - __main__ - ERROR - Method SavedModel failed: SavedModel directory not found: C:\Users\Asus1\Desktop\farminnovate\server\webapp\model\saved_model
+2025-07-09 06:48:55,161 - __main__ - INFO - Attempting method: Architecture + Weights
+2025-07-09 06:48:55,162 - __main__ - INFO - Creating EfficientNetV2S architecture...
+2025-07-09 06:48:57,706 - __main__ - ERROR - Error loading weights: Layer count mismatch when loading weights from file. Model expected 2 layers, found 4 saved layers.
+2025-07-09 06:48:57,706 - __main__ - WARNING - Could not load custom weights for Architecture + Weights
+2025-07-09 06:48:57,706 - __main__ - INFO - Attempting method: ImageNet Fallback
+2025-07-09 06:48:57,706 - __main__ - INFO - Creating EfficientNetV2S architecture...
+2025-07-09 06:48:59,847 - __main__ - INFO - Validating model...
+2025-07-09 06:48:59,847 - __main__ - INFO - Model input shape: (None, 224, 224, 3)
+2025-07-09 06:48:59,847 - __main__ - INFO - Model output shape: (None, 38)
+2025-07-09 06:48:59,849 - __main__ - INFO - Total parameters: 20,380,038
+2025-07-09 06:48:59,868 - __main__ - INFO - Using preprocessing method v1 for: C:\Users\Asus1\Desktop\farminnovate\server\webapp\bucket\temp_validation.png
+2025-07-09 06:48:59,869 - __main__ - INFO - Original image: (224, 224), mode: RGB
+2025-07-09 06:49:02,972 - __main__ - INFO - Method EfficientNet: sum=1.000000, max=0.045270, min=0.012844
+2025-07-09 06:49:02,985 - __main__ - INFO - Using preprocessing method v2 for: C:\Users\Asus1\Desktop\farminnovate\server\webapp\bucket\temp_validation.png
+2025-07-09 06:49:03,180 - __main__ - INFO - Method Simple: sum=1.000000, max=0.037958, min=0.019161
+2025-07-09 06:49:03,197 - __main__ - INFO - Using preprocessing method v3 for: C:\Users\Asus1\Desktop\farminnovate\server\webapp\bucket\temp_validation.png
+2025-07-09 06:49:03,413 - __main__ - INFO - Method Custom: sum=1.000000, max=0.043452, min=0.013200
+2025-07-09 06:49:03,429 - __main__ - INFO - Selected preprocessing method: EfficientNet standard
+2025-07-09 06:49:03,554 - __main__ - INFO - ==================================================
+2025-07-09 06:49:03,554 - __main__ - INFO - MODEL LOADING COMPLETE
+2025-07-09 06:49:03,555 - __main__ - INFO - Main model method: ImageNet Fallback
+2025-07-09 06:49:03,556 - __main__ - INFO - Recommendation model: Loaded
+2025-07-09 06:49:03,556 - __main__ - INFO - ==================================================
+2025-07-09 06:49:03,560 - __main__ - INFO - ==================================================
+2025-07-09 06:49:03,560 - __main__ - INFO - STARTING PLANT DISEASE DETECTION SERVER
+2025-07-09 06:49:03,562 - __main__ - INFO - ==================================================
+2025-07-09 06:49:03,562 - __main__ - INFO - Model loaded: True
+2025-07-09 06:49:03,563 - __main__ - INFO - Loading method: ImageNet Fallback
+2025-07-09 06:49:03,563 - __main__ - INFO - PIL available: True
+2025-07-09 06:49:03,563 - __main__ - INFO - TensorFlow version: 2.19.0
+2025-07-09 06:49:03,564 - __main__ - INFO - ==================================================
+2025-07-09 06:49:03,569 - werkzeug - WARNING -  * Debugger is active!
+2025-07-09 06:49:03,581 - werkzeug - INFO -  * Debugger PIN: 990-765-352
+2025-07-09 06:49:18,504 - __main__ - INFO - Preprocessing image: C:\Users\Asus1\Desktop\farminnovate\server\webapp\bucket\20250709_064918_TomatoEarlyBlight1.JPG
+2025-07-09 06:49:18,504 - __main__ - INFO - Using preprocessing method v1 for: C:\Users\Asus1\Desktop\farminnovate\server\webapp\bucket\20250709_064918_TomatoEarlyBlight1.JPG
+2025-07-09 06:49:18,517 - __main__ - INFO - Original image: (256, 256), mode: RGB
+2025-07-09 06:49:18,585 - __main__ - INFO - Processed input shape: (1, 224, 224, 3)
+2025-07-09 06:49:18,585 - __main__ - INFO - Input min/max: 0.0000/247.0000
+2025-07-09 06:49:18,590 - __main__ - INFO - Input mean/std: 124.4509/56.5753
+2025-07-09 06:49:18,590 - __main__ - INFO - Making prediction...
+2025-07-09 06:49:18,805 - __main__ - INFO - ==============================
+2025-07-09 06:49:18,805 - __main__ - INFO - PREDICTION ANALYSIS
+2025-07-09 06:49:18,805 - __main__ - INFO - ==============================
+2025-07-09 06:49:18,805 - __main__ - INFO - Predictions shape: (1, 38)
+2025-07-09 06:49:18,805 - __main__ - INFO - Predictions dtype: float32
+2025-07-09 06:49:18,805 - __main__ - INFO - Predictions sum: 1.000000
+2025-07-09 06:49:18,817 - __main__ - INFO - Predictions max: 0.047895
+2025-07-09 06:49:18,817 - __main__ - INFO - Predictions min: 0.007202
+2025-07-09 06:49:18,818 - __main__ - INFO - Predictions std: 0.010241
+2025-07-09 06:49:18,818 - __main__ - INFO - Contains NaN: False
+2025-07-09 06:49:18,818 - __main__ - INFO - Contains Inf: False
+2025-07-09 06:49:18,818 - __main__ - INFO - Top prediction: Orange Haunglongbing (Citrus greening) (0.047895)
+2025-07-09 06:49:18,818 - __main__ - INFO - Prediction entropy: 3.558728
+2025-07-09 06:49:18,818 - __main__ - INFO - ==============================
+2025-07-09 06:49:18,818 - __main__ - ERROR - Prediction error: Object of type float32 is not JSON serializable
+2025-07-09 06:49:18,851 - werkzeug - INFO - 127.0.0.1 - - [09/Jul/2025 06:49:18] "[35m[1mPOST /predict HTTP/1.1[0m" 500 -
+2025-07-09 06:56:40,842 - werkzeug - INFO -  * Detected change in 'C:\\Users\\Asus1\\Desktop\\farminnovate\\server\\webapp\\setup.py', reloading
+2025-07-09 06:56:41,835 - werkzeug - INFO -  * Restarting with stat
