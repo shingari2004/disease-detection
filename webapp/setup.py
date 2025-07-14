@@ -26,7 +26,7 @@ app = Flask(__name__)
 
 # Updated CORS configuration for Render
 CORS(app, origins=[
-    'https://your-nextjs-app.vercel.app',
+    'https://farminnovate-8pti.vercel.app',
     'https://*.onrender.com',
     'http://localhost:3000',
     'http://localhost:3001'
